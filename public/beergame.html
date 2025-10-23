@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+    <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>センサからの信号受信</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.1.9/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
+  </head>
+
+  <body>
+    <h1>ビールを注ごう！</h1>
+    <h1>スマホからのセンサ情報を受信</h1>
+    <div>
+      <div>あなたのID: <span id="myid"></span></div>
+      <button id="connect">ルームに入る</button>
+      <div>受信した情報はコンソールログで確認してください</div>
+    </div>
+
+    <script>
+        let scoket = io.connect();
+        let beta = 0;
+        let beerLevel = 0;
+        let pouring = false;
+        let result = "";
+
+        socket.on("sensour", (data) => {
+            beta = data.bata;
+        })
+
+        function setup() {
+        createCanvas(800, 800, WEBGL);
+        camera(0, 800, 100, 0, 0, 0, 0, 1, 0);
+        textSize(32);
+        textAlign(CENTER, CENTER);
+        noStroke();
+      }
+
+      function draw(){
+        background(0);
+        orbitControl();
+        ambientLight(50, 50, 50);
+        directionalLight(100, 20, 20, -1, -1, -1);
+        pointLight(20, 20, 100, 0, 0, 800);
+
+        push();
+        noFill();
+        stroke(150);
+        cylinder(100, 300);
+        pop();
+
+        if (beta > 30 && beta < 80){
+            pouring = true;
+            beerLevel += 1;
+        }else{
+            pouring = false;
+        }
+
+        push();
+        noStoke
+
+      }
+
+    </script>
+    </body>
+</html>
