@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>線まで注げゲーム🍺 横視点固定</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
+  
+  <!-- ===== 可愛いデザインCSS ===== -->
+  <style>
+    body {
+      background-color: #fffaf0;
+      font-family: 'Arial Rounded MT Bold', sans-serif;
+      text-align: center;
+    }
+
+    h1 {
+      font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+      color: #f47b6b; 
+      font-size: 2em;
+      margin-bottom: 5px;
+    }
+
+    p {
+      font-size: 1.2em;
+      color: #333;
+      margin: 5px 0;
+    }
+
+    button {
+      background-color: #a0e8af; 
+      border: none;
+      border-radius: 15px;       
+      padding: 10px 20px;
+      font-size: 1.2em;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin: 5px;
+    }
+
+    button:hover {
+      background-color: #7edb8a; 
+      transform: scale(1.05);     
+    }
+
+    #score, #timer, #result {
+      font-family: 'Arial Rounded MT Bold', sans-serif;
+      color: #333;
+      background-color: #fff9c4; 
+      border-radius: 10px;
+      padding: 5px 10px;
+      display: inline-block;
+      margin: 5px 0;
+    }
+
+    #result {
+      font-size: 1.5em;
+      color: #f47b6b;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <center>
+    <h1>黄金比でビールを注げ🍺</h1>
+    <p>コツは泡の中心で止めることだよ♪</p>
+    <div>あなたのID: <span id="myid"></span></div>
+    <button id="connect">注ぐ準備完了！</button>
+    <button id="start" disabled>スタート！</button>
+    <p id="timer">残り時間: 30 秒</p>
+    <p id="score">スコア: 0 杯</p>
+    <p id="result"></p>
+  </center>
+
+  <script>
+    let socket = io.connect();
+    let beta = 0;
+
+    // ====== ゲーム変数 ======
+    let pouring = false;
+    let beerLevel = 0;
+    let foamHeight = 10;
+    let score = 0;
+    let readyForNext = false;
+    let gameStarted = false;
+    let timeLeft = 30;
+    let timerInterval;
+
+    const glassHeight = 300; 
+    const glassRadius = 60;  
+    const maxBeer = 180;
+    const maxFoam = maxBeer * 0.382;
+    const targetLine = 180; // 線の高さ
+    let stopStart = 0;       
+    const stopDuration = 100;
+
+    // ====== クライアントID ======
+    let myid = sessionStorage.getItem('clientId');
+    if (!myid) {
+      myid = Math.random().toString(36).substring(2, 15);
+      sessionStorage.setItem('clientId', myid);
+    }
+    document.querySelector("#myid").innerHTML = myid;
+
+    // ====== ボタン ======
+    const connectBtn = document.querySelector("#connect");
+    const startBtn = document.querySelector("#start");
+
+    connectBtn.addEventListener("click", function() {
+      socket.emit("join", "game");
+      connectBtn.remove();
+      startBtn.disabled = false;
+    });
+
+    startBtn.addEventListener("click", startGame);
+
+    // ====== センサ情報受信 ======
+    socket.on("sensor", function(data) {
+      beta = parseFloat(data.b);
+    });
+
+    // ====== p5.js描画 ======
+    function setup() {
+      createCanvas(600, 400, WEBGL);
+      noStroke();
+    }
+
+    function draw() {
+      background(245);
+
+      // カメラ固定（真横からグラスを確認）
+      camera(
+        600, glassHeight - targetLine, 600,  // カメラ位置：右横
+        0, glassHeight - targetLine, 0,    // 注視点：グラス中心
+        0, 1, 0                  // 上方向を少し下向きに調整
+      );
+      
+
+      ambientLight(150);
+      directionalLight(255, 255, 255, -1, -1, -1);
+
+      // グラス
+      push();
+      noFill();
+      stroke(200, 200, 200, 120);
+      strokeWeight(2);
+      translate(0, glassHeight / 2, 0);
+      cylinder(glassRadius, glassHeight, 32, 1, true);
+      pop();
+
+      if (!gameStarted) return;
+
+      // 目標線（横線）
+      push();
+      stroke(255, 0, 0);
+      strokeWeight(3);
+      translate(0, glassHeight - targetLine, 0);
+      line(-glassRadius, 0, 0, glassRadius, 0, 0); 
+      pop();
+
+      // 注ぐ動作
+      if (beta < -20 && !readyForNext) {
+        pouring = true;
+        beerLevel += map(abs(beta), 20, 90, 0.8, 3);
+        beerLevel = constrain(beerLevel, 0, maxBeer*2);
+        foamHeight += 0.1;
+        foamHeight = constrain(foamHeight, 10, maxFoam);
+
+      } else {
+        pouring = false;
+      }
+
+      // ビール液体描画
+      push();
+      noStroke();
+      const top = beerLevel + foamHeight / 2;
+      if (top > targetLine) {
+        fill(255, 100, 60, 200); // あふれた
+      } else {
+        fill(255, 200, 60, 200);
+      }
+      translate(0, glassHeight - beerLevel / 2, 0);
+      cylinder(glassRadius * 0.98, beerLevel, 32, 1);
+      pop();
+
+      foamHeight = beerLevel * 0.382 / 0.618; // ビールに応じて泡を黄金比で増やす
+      foamHeight = constrain(foamHeight, 10, maxFoam);
+
+      // 泡描画
+      push();
+      fill(255, 255, 255, 230);
+      translate(0, glassHeight - beerLevel - foamHeight / 2, 0);
+      cylinder(glassRadius * 0.98, foamHeight, 32, 1);
+      pop();
+
+      // 線で0.2秒静止判定（泡の上端）
+      if (!readyForNext) {
+        if (abs(top - targetLine) < 6 && !pouring) {
+          if (stopStart === 0) stopStart = millis();
+          if (millis() - stopStart >= stopDuration) {
+            score++;
+            readyForNext = true;
+            document.querySelector("#score").innerText = "スコア: " + score + " 杯";
+            document.querySelector("#result").innerText = "✨1杯カウント！✨";
+            setTimeout(resetGlass, 1500);
+          }
+        } else {
+          stopStart = 0;
+        }
+
+        // あふれ判定
+        if (top > targetLine) {
+          readyForNext = true;
+          document.querySelector("#result").innerText = "💦 あふれた！スコア無し";
+          setTimeout(resetGlass, 1500);
+        }
+      }
+    }
+
+    // ====== グラスリセット ======
+    function resetGlass() {
+      beerLevel = 0;
+      foamHeight = 10;
+      readyForNext = false;
+      stopStart = 0;
+      document.querySelector("#result").innerText = "";
+    }
+
+    // ====== ゲームスタート ======
+    function startGame() {
+      if (gameStarted) return;
+      gameStarted = true;
+      score = 0;
+      beerLevel = 0;
+      foamHeight = 10;
+      timeLeft = 30;
+      document.querySelector("#score").innerText = "スコア: 0 杯";
+      document.querySelector("#result").innerText = "";
+      document.querySelector("#timer").innerText = "残り時間: 20 秒";
+
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        document.querySelector("#timer").innerText = "残り時間: " + timeLeft + " 秒";
+        if (timeLeft <= 0) endGame();
+      }, 1000);
+    }
+
+    // ====== ゲーム終了 ======
+    function endGame() {
+      clearInterval(timerInterval);
+      gameStarted = false;
+      pouring = false;
+      document.querySelector("#result").innerText = "🍻 終了！あなたは " + score + " 杯 注ぎました！";
+    }
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>🍺ビール注ぎチャレンジ3D</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: radial-gradient(#f9e79f, #f1c40f);
+        font-family: "Arial", sans-serif;
+        text-align: center;
+      }
+      #info {
+        position: absolute;
+        top: 10px;
+        width: 100%;
+        color: #4e342e;
+        font-weight: bold;
+        font-size: 20px;
+      }
+      #menu {
+        position: absolute;
+        top: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 15px;
+        padding: 15px 25px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        font-size: 18px;
+      }
+      label {
+        display: block;
+        margin: 8px 0 3px;
+      }
+      select,
+      input {
+        padding: 5px;
+        border-radius: 8px;
+        border: 1px solid #bbb;
+      }
+      button {
+        margin-top: 10px;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 10px;
+        background: #f1c40f;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #f39c12;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="info">スマホを下に傾けてビールを注ごう！🍺</div>
+
+    <!-- 🎨 クラフトビール設定メニュー -->
+    <div id="menu">
+      <label>🍺 ビールのタイプ</label>
+      <select id="beerType">
+        <option value="light">ライトエール</option>
+        <option value="amber">アンバー</option>
+        <option value="dark">スタウト</option>
+      </select>
+
+      <label>☁️ 泡の量</label>
+      <input type="range" id="foamLevel" min="1" max="5" value="3" />
+
+      <label>🥂 グラス形状</label>
+      <select id="glassShape">
+        <option value="pint">パイントグラス</option>
+        <option value="tulip">チューリップグラス</option>
+        <option value="mug">ジョッキ</option>
+      </select>
+
+      <button id="startBtn">クラフト開始！</button>
+    </div>
+
+    <script>
+      let socket;
+      let beerHeight = 0;
+      let targetBeerHeight = 0;
+      let foamHeight = 5;
+      let pouring = false;
+      let glasses = 0;
+      let gameTime = 20;
+      let startTime;
+      let gameActive = false;
+
+      // クラフト設定
+      let beerColor, foamMultiplier, glassShape;
+
+      function setup() {
+        createCanvas(windowWidth, windowHeight, WEBGL);
+        noStroke();
+
+        socket = io();
+        socket.emit("join", "game");
+
+        socket.on("sensor", (data) => {
+          pouring = data.z < -4;
+        });
+
+        document.getElementById("startBtn").addEventListener("click", () => {
+          setupCraftSettings();
+          document.getElementById("menu").style.display = "none";
+          startGame();
+        });
+      }
+
+      function setupCraftSettings() {
+        const beerType = document.getElementById("beerType").value;
+        const foamLevel = parseInt(document.getElementById("foamLevel").value);
+        const shape = document.getElementById("glassShape").value;
+
+        // ビールの色
+        if (beerType === "light") beerColor = color(255, 210, 70, 220);
+        else if (beerType === "amber") beerColor = color(230, 140, 40, 220);
+        else beerColor = color(60, 40, 20, 220);
+
+        foamMultiplier = foamLevel * 0.2;
+        glassShape = shape;
+      }
+
+      function startGame() {
+        beerHeight = 0;
+        targetBeerHeight = 0;
+        foamHeight = 5;
+        glasses = 0;
+        startTime = millis();
+        gameActive = true;
+      }
+
+      function draw() {
+        background(245, 220, 150);
+
+        // カメラ：真横からグラスを見るように
+        camera(0, 0, 500, 0, 0, 0, 0, 1, 0);
+
+        // 照明設定
+        ambientLight(160);
+        directionalLight(255, 255, 255, -1, -1, -0.5);
+
+        // 滑らかに注がれるアニメーション
+        if (pouring && gameActive) {
+          targetBeerHeight += 1.5;
+        } else {
+          targetBeerHeight -= 0.5;
+        }
+
+        targetBeerHeight = constrain(targetBeerHeight, 0, 190);
+        beerHeight = lerp(beerHeight, targetBeerHeight, 0.1);
+
+        if (pouring) foamHeight = lerp(foamHeight, 20, 0.05);
+        else foamHeight = lerp(foamHeight, 5, 0.05);
+
+        push();
+        translate(0, 100, 0);
+
+        // グラス（透明な素材で）
+        drawGlass(glassShape);
+
+        // ビール
+        if (beerHeight > 0) {
+          fill(beerColor);
+          push();
+          translate(0, 100 - beerHeight / 2 - 5, 0);
+          box(100, beerHeight, 100);
+          pop();
+        }
+
+        // 泡
+        if (foamHeight > 0) {
+          fill(255, 255, 255, 230);
+          push();
+          translate(0, -beerHeight / 2 - foamHeight / 2 + 100, 0);
+          box(100, foamHeight, 100);
+          pop();
+        }
+
+        pop();
+
+        // ゲーム進行
+        if (gameActive) {
+          if (beerHeight + foamHeight >= 200) {
+            glasses++;
+            beerHeight = 0;
+            targetBeerHeight = 0;
+            foamHeight = 5;
+          }
+
+          let elapsed = (millis() - startTime) / 1000;
+          let remaining = max(0, gameTime - elapsed);
+
+          document.getElementById("info").innerText =
+            `⏱ 残り ${remaining.toFixed(1)} 秒　🍺 ${glasses} 杯注ぎました！`;
+
+          if (remaining <= 0) {
+            gameActive = false;
+            document.getElementById("info").innerText =
+              `🎉 終了！ ${glasses} 杯注げました！\n${getComment(glasses)}`;
+          }
+        }
+      }
+
+      function drawGlass(shape) {
+        push();
+        fill(200, 200, 255, 40);
+        stroke(180, 180, 255, 80);
+        strokeWeight(1.5);
+        switch (shape) {
+          case "tulip":
+            scale(1, 1.1);
+            box(110, 200, 110);
+            break;
+          case "mug":
+            box(120, 200, 120);
+            break;
+          default:
+            box(100, 200, 100);
+        }
+        pop();
+      }
+
+      function getComment(count) {
+        if (count >= 8) return "職人技！🍺✨";
+        if (count >= 5) return "うまい！🍻";
+        if (count >= 3) return "まあまあかな😋";
+        return "もう一杯いこう！😅";
+      }
+
+      function windowResized() {
+        resizeCanvas(windowWidth, windowHeight);
+      }
+    </script>
+  </body>
+</html>
