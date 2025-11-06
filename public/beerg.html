@@ -16,8 +16,8 @@
     }
 
     h1 {
-      font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
-      color: #f47b6b; 
+      font-family: 'Arial Rounded MT Bold', sans-serif;
+      color: #f47b6b;
       font-size: 2em;
       margin-bottom: 5px;
     }
@@ -239,7 +239,7 @@
       timeLeft = 30;
       document.querySelector("#score").innerText = "スコア: 0 杯";
       document.querySelector("#result").innerText = "";
-      document.querySelector("#timer").innerText = "残り時間: 20 秒";
+      document.querySelector("#timer").innerText = "残り時間: " + timeLeft + " 秒";
 
       timerInterval = setInterval(() => {
         timeLeft--;
